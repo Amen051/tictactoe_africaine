@@ -1,0 +1,28 @@
+# --- Compilations et binaires ---
+*.class
+*.jar
+*.war
+*.ear
+
+# --- Dossiers générés ---
+bin/
+build/
+dist/
+out/
+target/
+
+# --- Documentation ---
+doc/
+javadoc/
+
+# --- IDE (VS Code, IntelliJ, Eclipse) ---
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+.vscode/
+.DS_Store
+
+# --- Fichiers de log ---
+*.log
