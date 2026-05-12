@@ -1,224 +1,185 @@
 package model;
 
-import java.util.Random;
 import utils.AbstractModeleEcoutable;
 
 /**
- * Classe moteur qui gère le modele avec les méthodes de déplacement
+ * Modèle pour le TicTacToe Africain (3 pions max + déplacements)
  */
-
 public class TicTacToeModel extends AbstractModeleEcoutable {
-    private int[][] grille;      
-    private int lignes;
-    private int colonnes;
-    private int nbCoups;
-    private static final int CASE_VIDE = 0; 
-    private long tempsDebut;
-    private long tempsFin;
+    private int[][] grille;
+    private final int lignes = 3;   // Fixé à 3 pour cette variante
+    private final int colonnes = 3;
+    
     private int joueurActuel;
+    private int pionsPosesJ1;
+    private int pionsPosesJ2;
+    private final int MAX_PIONS = 3;
+    private int nbCoups = 0;
+
+    // Pour la phase de mouvement : mémorise le pion sélectionné
+    private int ligSel = -1;
+    private int colSel = -1;
+
+    private long tempsDebut;
+    private boolean fini;
+
+    public TicTacToeModel() {
+        this.grille = new int[lignes][colonnes];
+        this.joueurActuel = 1;
+        this.pionsPosesJ1 = 0;
+        this.pionsPosesJ2 = 0;
+        this.nbCoups = 0;
+        this.fini = false;
+        this.tempsDebut = System.currentTimeMillis();
+    }
+    public TicTacToeModel(int l, int c) {
+        this(); 
+    }
 
     /**
-     * COnstructeur
-     * @param lignes = nombre de lignes du puzzle
-     * @param colonnes = nombre  de colonnes
-     * @requires  lignes superieur ou egale à 2 et colonnes superieure ou egale à 2
-     */
-    
-    public TicTacToeModel(int lignes, int colonnes) {
-        this.lignes = lignes;
-        this.colonnes = colonnes;
-        this.grille = new int[lignes][colonnes];
-        this.nbCoups = 0;
-        this.joueurActuel = 1;
-        this.tempsDebut = System.currentTimeMillis();
-        
-    }
-    
-    public TicTacToeModel() {
-        this(3, 3);
-    }
-    
-    /**
-     * Déplace la pièce à la position (l, c) si possible (pour le joueur)
-     * @param l ligne de la pièce à déplacer
-     * @param c colonne de la pièce à déplacer
-     * @requires   l &gt;= 0 et l inferieure à  getLignes() et c &gt;= 0 et c inferieur à getColonnes()
-     * @ensures   le nombre de coups augmente de 1 si le joueur joue un coup
-     * @ensures si joueurActuel == 1, il devient 2, sinon il devient 1.
+     * Logique principale : Pose ou Déplacement
      */
     public void jouerCoup(int l, int c) {
-        if(grille[l][c] == CASE_VIDE && !estFini())
-        {
-            grille[l][c] = joueurActuel;
-            nbCoups++;
-            if(joueurActuel==1)
-            {
-                joueurActuel = 2;
-            }else{ joueurActuel = 1;}
+        if (fini) return;
+
+        int jAvant = joueurActuel;
+
+        // PHASE 1 : Pose des pions
+        if (getNbPionsJoueur(joueurActuel) < MAX_PIONS) {
+            poserPion(l, c);
+        } 
+        // PHASE 2 : Mouvement des pions
+        else {
+            gererMouvement(l, c);
         }
-        
-        fireChangement();
+        if (joueurActuel != jAvant) {
+            nbCoups++;
+        }
     }
-    
+
+    private void poserPion(int l, int c) {
+        if (grille[l][c] == 0) {
+            grille[l][c] = joueurActuel;
+            if (joueurActuel == 1) pionsPosesJ1++;
+            else pionsPosesJ2++;
+            
+            verifierFin();
+            if (!fini) changerTour();
+            fireChangement();
+        }
+    }
+
+    private void gererMouvement(int l, int c) {
+        // Étape A : Sélection du pion à bouger
+        if (ligSel == -1) {
+            if (grille[l][c] == joueurActuel) {
+                ligSel = l;
+                colSel = c;
+                fireChangement(); // Pour que la vue puisse surbriller le pion
+            }
+        } 
+        // Étape B : Destination
+        else {
+            // Si on clique sur le même pion, on déselectionne
+            if (l == ligSel && c == colSel) {
+                ligSel = -1;
+                colSel = -1;
+            } 
+            // Si on clique sur une case vide adjacente
+            else if (grille[l][c] == 0 && sontAdjacents(ligSel, colSel, l, c)) {
+                grille[l][c] = joueurActuel;
+                grille[ligSel][colSel] = 0;
+                ligSel = -1;
+                colSel = -1;
+                
+                verifierFin();
+                if (!fini) changerTour();
+            }
+            // Si on clique sur un autre de ses propres pions, on change la sélection
+            else if (grille[l][c] == joueurActuel) {
+                ligSel = l;
+                colSel = c;
+            }
+            fireChangement();
+        }
+    }
 
     /**
-     * Verifier l'id du joueur qui a gagné
-     * On capture le temps de fin du mélange comme le temps de début d'un nouveau jeu
-     * pour calculer la durée de résolution du jeu
+     * Vérifie si deux cases sont voisines (Haut, Bas, Gauche, Droite, Diagonales)
      */
-    public int verifierGagnant()
-    {
-        //Logique de la ligne qui gagne en mode les contenus ont aligné donc on gange
-        for(int i = 0; i<lignes; i++)
-        {
-            int premier = grille[i][0];
-            if(premier==0) continue;
-            boolean ligneGagnante = true;
-            for(int j=1;j<colonnes;j++)
-            {
-                if(grille[i][j] != premier)
-                {
-                    ligneGagnante = false;break;
-                }
-            }
-            if(ligneGagnante) return premier;
-        }
-        //LOgique si c'est plutot sur les colonnes que les valeurs sont les mm donc on gagne
-        for(int j = 0; j<colonnes; j++)
-        {
-            int premier2 = grille[0][j];
-            if(premier2==0) continue;
-            boolean colonneGagnante2 = true;
-            for(int i=1;i<lignes;i++)
-            {
-                if(grille[i][j] != premier2)
-                {
-                    colonneGagnante2 = false;break;
-                }
-            }
-            if(colonneGagnante2) return premier2;
-        }
+    public boolean sontAdjacents(int l1, int c1, int l2, int c2) {
+        return Math.abs(l1 - l2) <= 1 && Math.abs(c1 - c2) <= 1;
+    }
 
-        //Logique de gagner en mode diagonale montante en mode Haut gauche vers Bas Droit si les contenus des diagonales sont identiques
-        int premierDiag1 = grille[0][0];
-        if(premierDiag1 != 0)
-        {
-            boolean diag1Gagnante = true;
-            for(int i =0;i<lignes;i++)
-            {
-                if(grille[i][i] != premierDiag1)
-                { 
-                    diag1Gagnante = false;
-                    break;
-                }
-            }
-            if(diag1Gagnante) return premierDiag1;
-        }
+    private void changerTour() {
+        joueurActuel = (joueurActuel == 1) ? 2 : 1;
+    }
 
-        //Logique de gagner en mode diagonale montante en mode Bas Gauche vers Haut Droit si les contenus des diagonales sont identiques
-        int premierDiag2 = grille[lignes-1][0];
-        if(premierDiag2 != 0)
-        {
-            boolean diag2Gagnante = true;
-            for(int i =0;i<lignes;i++)
-            {
-                if(grille[lignes-1-i][i] != premierDiag2)
-                { 
-                    diag2Gagnante = false;
-                    break;
-                }
-            }
-            if(diag2Gagnante) return premierDiag2;
+    private void verifierFin() {
+        if (verifierGagnant() != 0) {
+            fini = true;
         }
+        // Optionnel : On peut ajouter ici une vérification si un joueur est bloqué
+    }
+
+    public int verifierGagnant() {
+        // On réutilise ta logique d'alignement (lignes, colonnes, diagonales)
+        // Lignes
+        for (int i = 0; i < 3; i++) {
+            if (grille[i][0] != 0 && grille[i][0] == grille[i][1] && grille[i][0] == grille[i][2])
+                return grille[i][0];
+        }
+        // Colonnes
+        for (int j = 0; j < 3; j++) {
+            if (grille[0][j] != 0 && grille[0][j] == grille[1][j] && grille[0][j] == grille[2][j])
+                return grille[0][j];
+        }
+        // Diagonales
+        if (grille[0][0] != 0 && grille[0][0] == grille[1][1] && grille[0][0] == grille[2][2])
+            return grille[0][0];
+        if (grille[0][2] != 0 && grille[0][2] == grille[1][1] && grille[0][2] == grille[2][0])
+            return grille[0][2];
+
         return 0;
     }
-   
-   /**
-    * le match est nul si le nombre de coups est atteint et il n'y a pas de gagnant
-    */
-   public boolean estMatchNul()
-   {
-    return nbCoups== (lignes*colonnes) && verifierGagnant()==0;
-   }
-    
-    /**
-     * Vérifie si le tictactoe est résolu
-     * C'est fini si quelqu'un a gagné ou c'est un match nul
-     * @return  1 si le jeu est fini, 0 sinon
-     */
-    public boolean estFini() {
-        return verifierGagnant()!=0 || estMatchNul();
+
+    public void rejouer() {
+        this.grille = new int[3][3];
+        this.pionsPosesJ1 = 0;
+        this.pionsPosesJ2 = 0;
+        this.joueurActuel = 1;
+        this.ligSel = -1;
+        this.colSel = -1;
+        this.fini = false;
+        this.tempsDebut = System.currentTimeMillis();
+        fireChangement();
     }
-    /**
-     * Calculer le temps écoulé pour finir
-     * on prend le temps auquel le jeu est résolu - temps de début du jeu
-     * @return le temps de résolution du jeu
-     */
+
+    // --- GETTERS & SETTERS ---
+
+    public int getValeur(int l, int c) { return grille[l][c]; }
+    public int getJoueurActuel() { return joueurActuel; }
+    public int getLignes() { return lignes; }
+    public int getColonnes() { return colonnes; }
+    public boolean estFini() { return fini; }
+    
+    public int getNbPionsJoueur(int joueur) {
+        return (joueur == 1) ? pionsPosesJ1 : pionsPosesJ2;
+    }
+
+    public int getLigSel() { return ligSel; }
+    public int getColSel() { return colSel; }
+
     public long getTempsEcoule() {
-        if (estFini()) {
-            return (System.currentTimeMillis() - tempsDebut) / 1000; 
-        }
         return (System.currentTimeMillis() - tempsDebut) / 1000;
     }
-   
-   /**
-    * rejouer la partie si on clique sur restart
-    */
-    public void rejouer() {
-        this.grille = new int[lignes][colonnes]; // On vide la grille
-        this.nbCoups = 0;
-        this.joueurActuel = 1; // X recommence
-        fireChangement(); // On prévient la vue qu'il faut tout effacer
-    }
     
-    /**
-     * On veut returner la valeur de la grille
-     * @param l ligne
-     * @param c colonne
-     * @return un entier si vrai, -1 sinon
-     */
-    public int getValeur(int l, int c) {
-        if (l >= 0 && l < lignes && c >= 0 && c < colonnes) {
-            return grille[l][c];
-        }
-        return -1;
+    // Pour l'IA (Simulation)
+    public void setValeurSimulation(int l, int c, int val) {
+        this.grille[l][c] = val;
     }
-    
-    public int getLignes() {
-        return lignes;
-    }
-    
-    public int getColonnes() {
-        return colonnes;
-    }
-    public int getJoueurActuel()
-    {
-        return joueurActuel;
-    }
-    
+
     public int getNbCoups() {
         return nbCoups;
     }
-    
-    public void resetNbCoups() {
-        this.nbCoups = 0;
-        fireChangement();
-    }
-    
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < lignes; i++) {
-            for (int j = 0; j < colonnes; j++) {
-                if (grille[i][j] == CASE_VIDE) {
-                    sb.append("   ");
-                } else {
-                    sb.append(String.format("%2d ", grille[i][j]));
-                }
-            }
-            sb.append("\n");
-        }
-        return sb.toString();
-    }
-
 }
